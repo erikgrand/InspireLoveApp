@@ -1,0 +1,49 @@
+name: Build Android App Bundle (.aab)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install Android SDK (API 35)
+        uses: android-actions/setup-android@v3
+      - name: Install platform & build-tools 35
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      # Recreate your upload keystore from base64 secret
+      - name: Restore upload keystore
+        run: echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > $HOME/upload-keystore.jks
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+
+      # Build the RELEASE App Bundle for the composeApp module
+      - name: Build .aab
+        env:
+          SIGNING_STORE_FILE: ${{ env.HOME }}/upload-keystore.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          ./gradlew :composeApp:bundleRelease --stacktrace
+
+      # Save the .aab as an artifact you can download
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: composeApp-release-aab
+          path: composeApp/build/outputs/bundle/release/*.aab
